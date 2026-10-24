@@ -35,7 +35,7 @@ People spend hours on news but still miss what matters.
 
 A manual test is complete: one news story became a finished 4-panel comic with a consistent robot reporter mascot.
 
-![Sample comic](PanelPulse/Images/sample-image.png)
+![Sample comic](PanelPulse_ComicGenerator/Images/sample-image.png)
 
 Rules for comics: use only the headline and short summary, add text in code (not inside generated images), avoid real people's faces, label every comic "AI-assisted", and credit the source.
 
