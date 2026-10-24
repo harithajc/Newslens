@@ -20,7 +20,7 @@ Each news story becomes a 4-panel comic starring a friendly robot reporter:
 
 Our first test comic, "Tech in 4 Panels: Apple Goes Foldable", was made from a real tech news story.
 
-![Sample comic](images/sample-image.png)
+![Sample comic](images/sample_image.png)
 
 ## How It Works
 
