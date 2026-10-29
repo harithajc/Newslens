@@ -54,12 +54,12 @@ Rules for comics: use only the headline and short summary, add text in code (not
 
 ## Repository Structure
 
-- `backend/`: API, feed fetching, database
-- `ml/`: labeled data and model training
-- `frontend/`: the app
-- `generator/`: PanelPulse comic generator
-- `docs/`: tests and notes
-- `images/`: screenshots and sample comics
+- `APP/`: the NewsLens app
+  - `backend/`: feed fetching, API, database
+  - `ml/`: labeled data and the importance model
+  - `frontend/`: the screens users see
+- `PanelPulse_ComicGenerator/`: the comic feature
+  - `Images/`: sample comics
 
 ## Status
 
