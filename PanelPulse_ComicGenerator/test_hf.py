@@ -1,37 +1,25 @@
 import os
-import json
-import urllib.request
+import requests
 from dotenv import load_dotenv
 
-# Load your HF_TOKEN from the .env file
 load_dotenv()
 token = os.getenv("HF_TOKEN")
+print("Token found:", token is not None)   # prints True/False only, never the key
 
-print("Requesting image from Hugging Face...")
+url = "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
+headers = {"Authorization": f"Bearer {token}"}
+prompt = (
+    "flat colorful cartoon, thick black outlines, small round robot reporter, "
+    "cream face, grey metal frame, red ear pieces, yellow hat, green chest panel, "
+    "holding a tiny spiral notepad, simple background, no text"
+)
 
-# The direct URL to the FLUX model
-url = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+response = requests.post(url, headers=headers, json={"inputs": prompt}, timeout=120)
+print("Status:", response.status_code)
 
-# Package your prompt and secure token
-headers = {
-    "Authorization": f"Bearer {token}",
-    "Content-Type": "application/json"
-}
-
-# The prompt is updated for the 2D comic style
-data = {
-    "inputs": "2D vector art, flat colors, thick black outlines, comic book panel. A small round robot reporter with a yellow hat and a tiny notepad looks surprised, holding a phone. Simple city street background. No text."
-}
-
-# Send the request and save the image
-try:
-    req = urllib.request.Request(url, headers=headers, data=json.dumps(data).encode("utf-8"))
-    # Added a 30-second timeout to prevent infinite hanging
-    with urllib.request.urlopen(req, timeout=30) as response:
-        with open("panel_hf.png", "wb") as f:
-            f.write(response.read())
-    print("Success! Saved panel_hf.png")
-except urllib.error.HTTPError as e:
-    print(f"HTTP Error: {e.code} - {e.read().decode('utf-8')}")
-except Exception as e:
-    print(f"Error: {e}")
+if response.status_code == 200:
+    with open("panel_hf.png", "wb") as f:
+        f.write(response.content)
+    print("Saved panel_hf.png")
+else:
+    print(response.text[:500])
