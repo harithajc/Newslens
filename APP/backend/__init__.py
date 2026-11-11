@@ -1,0 +1,1 @@
+"""NewsLens backend package."""
