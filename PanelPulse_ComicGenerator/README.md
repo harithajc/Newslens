@@ -34,9 +34,9 @@ Our first test comic, "Tech in 4 Panels: Apple Goes Foldable", was made from a r
 
 - [x] Concept validated with a manual test (script, 4 panels, lettering, layout)
 - [x] Mascot and art style defined
-- [ ] Automated script generation
-- [ ] Automated panel generation
-- [ ] Automated lettering
+- [x] Automated script generation
+- [x] Automated panel generation (Hugging Face or local fallback)
+- [x] Automated lettering
 - [ ] Automatic news fetching
 - [ ] App interface and share buttons
 - [ ] User testing
@@ -65,6 +65,8 @@ Our first test comic, "Tech in 4 Panels: Apple Goes Foldable", was made from a r
 - **Phase 4:** user testing and polish
 
 **Target launch:** December 30, 2026
+
+The runnable implementation is in [`Generator/comic_generator.py`](Generator/comic_generator.py).
 
 ## License
 

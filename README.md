@@ -70,7 +70,7 @@ Rules for comics: use only the headline and short summary, add text in code (not
 - [ ] Importance model
 - [ ] Backend API
 - [ ] Frontend app
-- [ ] Automated comic generation
+- [x] Automated comic generation (provider-optional PanelPulse pipeline)
 - [ ] Pilot survey and user testing
 
 ## Limitations
