@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from apscheduler.schedulers.background import BackgroundScheduler
 from pydantic import BaseModel, Field
 
 from .database import get_stories, save_stories
@@ -43,9 +44,42 @@ class ComicResponse(BaseModel):
 
 
 OUTPUT_DIR = COMIC_ROOT / "output"
+REFRESH_MINUTES = 1
 generator = ComicGenerator(output_dir=OUTPUT_DIR)
+scheduler = BackgroundScheduler()
 app = FastAPI(title="NewsLens API", version="0.1.0")
 app.mount("/comics", StaticFiles(directory=OUTPUT_DIR), name="comics")
+
+
+def refresh_news() -> Dict[str, int]:
+    """Fetch and save headlines, then print the refresh result."""
+    stories = fetch_headlines()
+    saved = save_stories(stories)
+    print(
+        f"News refresh: fetched={len(stories)}, saved={saved}",
+        flush=True,
+    )
+    return {"fetched": len(stories), "saved": saved}
+
+
+@app.on_event("startup")
+def start_scheduler() -> None:
+    """Start automatic headline refreshes."""
+    scheduler.add_job(
+        refresh_news,
+        "interval",
+        minutes=REFRESH_MINUTES,
+        id="news-refresh",
+        replace_existing=True,
+    )
+    scheduler.start()
+
+
+@app.on_event("shutdown")
+def stop_scheduler() -> None:
+    """Stop automatic headline refreshes."""
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
 
 
 @app.get("/")
@@ -72,9 +106,7 @@ def read_stories(limit: int = 50) -> List[Dict[str, str]]:
 @app.post("/api/refresh")
 def refresh_stories() -> Dict[str, int]:
     """Fetch Times of India headlines and save new stories."""
-    stories = fetch_headlines()
-    saved = save_stories(stories)
-    return {"fetched": len(stories), "saved": saved}
+    return refresh_news()
 
 
 @app.post("/api/comics", response_model=ComicResponse, status_code=201)

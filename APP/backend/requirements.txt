@@ -1,4 +1,6 @@
 fastapi>=0.110
 uvicorn>=0.29
 feedparser>=6.0
+APScheduler>=3.10
+tzlocal<3
 -r ../../PanelPulse_ComicGenerator/requirements.txt
