@@ -44,7 +44,7 @@ class ComicResponse(BaseModel):
 
 
 OUTPUT_DIR = COMIC_ROOT / "output"
-REFRESH_MINUTES = 1
+REFRESH_MINUTES = 30
 generator = ComicGenerator(output_dir=OUTPUT_DIR)
 scheduler = BackgroundScheduler()
 app = FastAPI(title="NewsLens API", version="0.1.0")
