@@ -11,6 +11,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .database import get_stories, save_stories
+from .fetch_news import fetch_headlines
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 COMIC_ROOT = PROJECT_ROOT / "PanelPulse_ComicGenerator"
 if str(COMIC_ROOT) not in sys.path:
@@ -58,6 +61,20 @@ def root() -> Dict[str, str]:
 @app.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/stories")
+def read_stories(limit: int = 50) -> List[Dict[str, str]]:
+    """Return stories saved in the database."""
+    return get_stories(limit)
+
+
+@app.post("/api/refresh")
+def refresh_stories() -> Dict[str, int]:
+    """Fetch Times of India headlines and save new stories."""
+    stories = fetch_headlines()
+    saved = save_stories(stories)
+    return {"fetched": len(stories), "saved": saved}
 
 
 @app.post("/api/comics", response_model=ComicResponse, status_code=201)
