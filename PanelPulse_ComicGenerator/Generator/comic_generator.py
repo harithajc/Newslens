@@ -12,10 +12,10 @@ import argparse
 import io
 import os
 import re
-import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
+from urllib.parse import urlparse
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -168,29 +168,123 @@ class ComicGenerator:
     ) -> None:
         canvas = Image.new("RGB", CANVAS_SIZE, "#fffaf0")
         draw = ImageDraw.Draw(canvas)
+
+        # Keep a header above the panels and put the source inside it.
+        draw.rectangle((0, 0, CANVAS_SIZE[0], 64), fill="#263238")
+        label = "PANELPULSE | AI-ASSISTED"
+        draw.text((28, 17), label, fill="white", font=_font(24))
+        if story.source_url:
+            domain = urlparse(story.source_url).netloc
+            if domain:
+                source_text, source_font = _fit_text(
+                    draw,
+                    f"Source: {domain}",
+                    700,
+                    30,
+                    18,
+                    10,
+                )
+                source_width = draw.textbbox((0, 0), source_text, font=source_font)[2]
+                draw.text(
+                    (CANVAS_SIZE[0] - source_width - 28, 22),
+                    source_text,
+                    fill="white",
+                    font=source_font,
+                )
+
         for index, (image, panel) in enumerate(zip(images, panels)):
             x = (index % 2) * PANEL_SIZE[0]
-            y = (index // 2) * PANEL_SIZE[1]
-            canvas.paste(image.resize(PANEL_SIZE), (x, y))
-            draw.rectangle((x + 16, y + 16, x + 752, y + 752), outline="#263238", width=6)
-            draw.rectangle((x + 28, y + 570, x + 740, y + 744), fill="#fffaf0")
-            draw.text((x + 48, y + 590), f"{index + 1}. {panel.title}", fill="#263238", font=_font(30))
+            y = 64 + (index // 2) * 736
+            panel_image = image.resize((PANEL_SIZE[0], 736))
+            canvas.paste(panel_image, (x, y))
+            draw.rectangle((x + 16, y + 16, x + 752, y + 720), outline="#263238", width=6)
+            draw.rectangle((x + 28, y + 570, x + 740, y + 728), fill="#fffaf0")
+
+            title = f"{index + 1}. {panel.title}"
+            title, title_font = _fit_text(draw, title, 692, 38, 30, 16)
+            draw.text((x + 48, y + 586), title, fill="#263238", font=title_font)
+
+            caption, caption_font = _fit_text(draw, panel.caption, 692, 86, 24, 12)
             draw.multiline_text(
-                (x + 48, y + 635),
-                "\n".join(textwrap.wrap(panel.caption, width=39)),
+                (x + 48, y + 630),
+                caption,
                 fill="#263238",
-                font=_font(24),
-                spacing=4,
+                font=caption_font,
+                spacing=3,
             )
-        draw.rectangle((0, 0, CANVAS_SIZE[0], 54), fill="#263238")
-        draw.text((28, 12), "PANELPULSE | AI-ASSISTED | SOURCE-BASED BRIEFING", fill="white", font=_font(24))
-        if story.source_url:
-            draw.text((28, 1480), f"Source: {story.source_url}", fill="#263238", font=_font(18))
         canvas.save(output_path)
 
 
 def _clean(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
+
+
+def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont,
+                max_width: int) -> str:
+    """Wrap text without allowing a word or line to cross the panel width."""
+    lines = []
+    for paragraph in text.splitlines() or [text]:
+        words = paragraph.split()
+        if not words:
+            lines.append("")
+            continue
+
+        current = words[0]
+        for word in words[1:]:
+            candidate = f"{current} {word}"
+            if draw.textbbox((0, 0), candidate, font=font)[2] <= max_width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+
+        # Split unusually long words instead of letting them overflow.
+        if draw.textbbox((0, 0), current, font=font)[2] > max_width:
+            character_line = ""
+            for character in current:
+                candidate = character_line + character
+                if draw.textbbox((0, 0), candidate, font=font)[2] <= max_width:
+                    character_line = candidate
+                else:
+                    if character_line:
+                        lines.append(character_line)
+                    character_line = character
+            if character_line:
+                lines.append(character_line)
+        else:
+            lines.append(current)
+    return "\n".join(lines)
+
+
+def _text_fits(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont,
+               max_width: int, max_height: int) -> bool:
+    box = draw.multiline_textbbox((0, 0), text, font=font, spacing=3)
+    width = box[2] - box[0]
+    height = box[3] - box[1]
+    return width <= max_width and height <= max_height
+
+
+def _fit_text(draw: ImageDraw.ImageDraw, text: str, max_width: int,
+              max_height: int, start_size: int, minimum_size: int):
+    """Wrap and shrink text until it fits, then cut it with an ellipsis."""
+    text = _clean(text)
+    for size in range(start_size, minimum_size - 1, -2):
+        font = _font(size)
+        wrapped = _wrap_text(draw, text, font, max_width)
+        if _text_fits(draw, wrapped, font, max_width, max_height):
+            return wrapped, font
+
+    # Last resort: keep the smallest font and remove characters until it fits.
+    font = _font(minimum_size)
+    shortened = text
+    while shortened:
+        candidate = shortened + "..." if shortened != text else text
+        wrapped = _wrap_text(draw, candidate, font, max_width)
+        if _text_fits(draw, wrapped, font, max_width, max_height):
+            return wrapped, font
+        shortened = shortened[:-1]
+
+    return "...", font
 
 
 def _sentences(value: str) -> list[str]:

@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 from pydantic import BaseModel, Field
 
-from .database import get_stories, save_stories
+from .database import get_story_by_id, get_stories, save_stories
 from .fetch_news import fetch_headlines
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -109,11 +109,11 @@ def refresh_stories() -> Dict[str, int]:
     return refresh_news()
 
 
-@app.post("/api/comics", response_model=ComicResponse, status_code=201)
-def create_comic(request: ComicRequest) -> ComicResponse:
+def make_comic(headline: str, summary: str, source_url: str) -> ComicResponse:
+    """Create a comic using the same logic for stories and manual requests."""
     try:
         result = generator.generate(
-            ComicInput(request.headline, request.summary, request.source_url),
+            ComicInput(headline, summary, source_url),
             filename=f"{uuid4().hex}.png",
         )
     except ValueError as exc:
@@ -133,3 +133,21 @@ def create_comic(request: ComicRequest) -> ComicResponse:
             for panel in result.panels
         ],
     )
+
+
+@app.post("/api/comics", response_model=ComicResponse, status_code=201)
+def create_comic(request: ComicRequest) -> ComicResponse:
+    """Create a comic from a manual headline and summary."""
+    return make_comic(request.headline, request.summary, request.source_url)
+
+
+@app.post("/api/stories/{story_id}/comic", response_model=ComicResponse, status_code=201)
+def create_story_comic(story_id: str) -> ComicResponse:
+    """Create a comic from a saved news story."""
+    story = get_story_by_id(story_id)
+    if story is None:
+        raise HTTPException(status_code=404, detail="Story not found")
+
+    title = story.get("title", "")
+    summary = story.get("summary", "").strip() or title
+    return make_comic(title, summary, story.get("link", ""))

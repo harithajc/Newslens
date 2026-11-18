@@ -3,7 +3,7 @@
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 
 DATABASE_PATH = Path(__file__).resolve().parent / "newslens.db"
@@ -84,6 +84,23 @@ def get_stories(limit: int = 50) -> List[Dict[str, str]]:
         ).fetchall()
 
     return [dict(row) for row in rows]
+
+
+def get_story_by_id(story_id: str) -> Optional[Dict[str, str]]:
+    """Return one story by ID, or None when it does not exist."""
+    create_table()
+
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT id, title, summary, link, source, published, fetched_at
+            FROM stories
+            WHERE id = ?
+            """,
+            (story_id,),
+        ).fetchone()
+
+    return dict(row) if row else None
 
 
 create_table()
