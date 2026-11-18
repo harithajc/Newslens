@@ -156,7 +156,7 @@ class ComicGenerator:
         draw.rectangle((296, 370, 472, 440), fill="#6fbf73", outline="#263238", width=5)
         draw.arc((330, 320, 438, 410), 20, 160, fill="#263238", width=5)
         draw.polygon(((250, 190), (310, 110), (458, 110), (520, 190)), fill="#f3c84b", outline="#263238")
-        draw.text((40, 570), "LOCAL ART FALLBACK", fill="#263238", font=_font(28))
+        draw.text((48, 520), "LOCAL ART FALLBACK", fill="#263238", font=_font(18))
         return image
 
     @staticmethod
