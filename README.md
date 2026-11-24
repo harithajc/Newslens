@@ -45,19 +45,19 @@ Rules for comics: use only the headline and short summary, add text in code (not
 |---|---|
 | News source | Times of India RSS feeds |
 | Fetching | Python, feedparser |
-| Machine learning | scikit-learn, sentence-transformers |
+| Machine learning | scikit-learn (planned), sentence-transformers (planned) |
 | Backend | FastAPI |
 | Database | SQLite |
 | Updates | APScheduler (every 30 minutes) |
-| Frontend | React with Tailwind CSS |
+| Frontend | React with Tailwind CSS (planned) |
 | Hosting | Render or Railway, Vercel or Netlify |
 
 ## Repository Structure
 
 - `APP/`: the NewsLens app
   - `backend/`: FastAPI backend, feed fetching, SQLite storage, and scheduled refresh
-  - `ml/`: labeled data and the importance model
-  - `frontend/`: the screens users see
+  - `ml/` (planned): labeled data and the importance model
+  - `frontend/` (planned): the screens users see
 - `PanelPulse_ComicGenerator/`: the comic feature
   - `Images/`: sample comics
 
@@ -88,6 +88,14 @@ Then start the API:
 py -m uvicorn APP.backend.main:app --reload
 ```
 
+After starting, open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs). Call `POST /api/refresh` once to load stories.
+
+Put any Hugging Face key in a `.env` file that is never committed. On Mac or Linux, use `python3` instead of `py`.
+
+## AI Use
+
+GitHub Copilot helped write code. All code was run, tested and reviewed by the team, and comics are labeled AI-assisted.
+
 ## Limitations
 
 - "Important" is partly an opinion.
@@ -106,3 +114,5 @@ SDG 9, SDG 11, SDG 17
 ## Credits
 
 News headlines, short summaries and links belong to Times of India. NewsLens shows only short summaries with credit and a link to the original article.
+
+NewsLens uses only RSS headlines, short summaries and links. The feed terms of use are to be confirmed.
