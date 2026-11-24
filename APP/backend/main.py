@@ -13,7 +13,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from pydantic import BaseModel, Field
 
 from .database import get_story_by_id, get_stories, save_stories
-from .fetch_news import fetch_headlines
+from .fetch_news import fetch_all_feeds
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 COMIC_ROOT = PROJECT_ROOT / "PanelPulse_ComicGenerator"
@@ -53,7 +53,7 @@ app.mount("/comics", StaticFiles(directory=OUTPUT_DIR), name="comics")
 
 def refresh_news() -> Dict[str, int]:
     """Fetch and save headlines, then print the refresh result."""
-    stories = fetch_headlines()
+    stories = fetch_all_feeds()
     saved = save_stories(stories)
     print(
         f"News refresh: fetched={len(stories)}, saved={saved}",
@@ -98,9 +98,9 @@ def health() -> Dict[str, str]:
 
 
 @app.get("/api/stories")
-def read_stories(limit: int = 50) -> List[Dict[str, str]]:
+def read_stories(limit: int = 50, section: str = None) -> List[Dict[str, str]]:
     """Return stories saved in the database."""
-    return get_stories(limit)
+    return get_stories(limit, section)
 
 
 @app.post("/api/refresh")

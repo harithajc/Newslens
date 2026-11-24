@@ -115,4 +115,4 @@ SDG 9, SDG 11, SDG 17
 
 News headlines, short summaries and links belong to Times of India. NewsLens shows only short summaries with credit and a link to the original article.
 
-NewsLens uses only RSS headlines, short summaries and links. The feed terms of use are to be confirmed.
+NewsLens uses only RSS headlines, short summaries and links. The feed terms of use are to be confirmed with our guide.

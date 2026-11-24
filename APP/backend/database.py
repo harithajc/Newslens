@@ -28,10 +28,17 @@ def create_table() -> None:
                 link TEXT,
                 source TEXT,
                 published TEXT,
-                fetched_at TEXT
+                fetched_at TEXT,
+                section TEXT
             )
             """
         )
+        columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(stories)").fetchall()
+        }
+        if "section" not in columns:
+            connection.execute("ALTER TABLE stories ADD COLUMN section TEXT")
 
 
 def save_stories(stories: Iterable[Dict[str, str]]) -> int:
@@ -49,8 +56,8 @@ def save_stories(stories: Iterable[Dict[str, str]]) -> int:
             cursor = connection.execute(
                 """
                 INSERT OR IGNORE INTO stories
-                    (id, title, summary, link, source, published, fetched_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (id, title, summary, link, source, published, fetched_at, section)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     story_id,
@@ -60,6 +67,7 @@ def save_stories(stories: Iterable[Dict[str, str]]) -> int:
                     story.get("source", ""),
                     story.get("published", ""),
                     story.get("fetched_at", fetched_at),
+                    story.get("section", "Top"),
                 ),
             )
             inserted += cursor.rowcount
@@ -67,21 +75,33 @@ def save_stories(stories: Iterable[Dict[str, str]]) -> int:
     return inserted
 
 
-def get_stories(limit: int = 50) -> List[Dict[str, str]]:
-    """Return the newest fetched stories."""
+def get_stories(limit: int = 50, section: Optional[str] = None) -> List[Dict[str, str]]:
+    """Return the newest fetched stories, optionally by section."""
     create_table()
     limit = max(1, limit)
 
     with get_connection() as connection:
-        rows = connection.execute(
-            """
-            SELECT id, title, summary, link, source, published, fetched_at
-            FROM stories
-            ORDER BY fetched_at DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+        if section:
+            rows = connection.execute(
+                """
+                SELECT id, title, summary, link, source, published, fetched_at, section
+                FROM stories
+                WHERE section = ?
+                ORDER BY fetched_at DESC
+                LIMIT ?
+                """,
+                (section, limit),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                """
+                SELECT id, title, summary, link, source, published, fetched_at, section
+                FROM stories
+                ORDER BY fetched_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
 
     return [dict(row) for row in rows]
 
@@ -93,7 +113,7 @@ def get_story_by_id(story_id: str) -> Optional[Dict[str, str]]:
     with get_connection() as connection:
         row = connection.execute(
             """
-            SELECT id, title, summary, link, source, published, fetched_at
+            SELECT id, title, summary, link, source, published, fetched_at, section
             FROM stories
             WHERE id = ?
             """,
