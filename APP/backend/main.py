@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 from pydantic import BaseModel, Field
 
-from .database import get_story_by_id, get_stories, save_stories
+from .database import get_story_by_id, get_stories, migrate_published_dates, save_stories
 from .fetch_news import fetch_all_feeds
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -65,6 +65,7 @@ def refresh_news() -> Dict[str, int]:
 @app.on_event("startup")
 def start_scheduler() -> None:
     """Start automatic headline refreshes."""
+    migrate_published_dates()
     scheduler.add_job(
         refresh_news,
         "interval",
@@ -111,6 +112,12 @@ def refresh_stories() -> Dict[str, int]:
 
 def make_comic(headline: str, summary: str, source_url: str) -> ComicResponse:
     """Create a comic using the same logic for stories and manual requests."""
+    headline = headline.strip()
+    summary = summary.strip()
+    normalized_headline = " ".join(headline.casefold().split())
+    normalized_summary = " ".join(summary.casefold().split())
+    if not summary or normalized_summary == normalized_headline:
+        summary = "Open the source link for the full story."
     try:
         result = generator.generate(
             ComicInput(headline, summary, source_url),

@@ -2,11 +2,40 @@
 
 import sqlite3
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
+from zoneinfo import ZoneInfo
 
 
 DATABASE_PATH = Path(__file__).resolve().parent / "newslens.db"
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def normalize_published(value: str) -> str:
+    """Convert old RSS and newer ISO timestamps to India Standard Time."""
+    if not value:
+        return ""
+
+    value = value.strip()
+    if not value:
+        return ""
+
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            parsed = parsedate_to_datetime(value)
+        except (TypeError, ValueError, OverflowError):
+            return value
+
+    if parsed is None:
+        return value
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=IST)
+    else:
+        parsed = parsed.astimezone(IST)
+    return parsed.isoformat(timespec="seconds")
 
 
 def get_connection() -> sqlite3.Connection:
@@ -41,6 +70,26 @@ def create_table() -> None:
             connection.execute("ALTER TABLE stories ADD COLUMN section TEXT")
 
 
+def migrate_published_dates() -> int:
+    """Rewrite existing RSS published values to ISO 8601 in place."""
+    create_table()
+    migrated = 0
+    with get_connection() as connection:
+        rows = connection.execute(
+            "SELECT id, published FROM stories WHERE published IS NOT NULL"
+        ).fetchall()
+        for row in rows:
+            original = (row["published"] or "").strip()
+            normalized = normalize_published(original)
+            if normalized and normalized != original:
+                connection.execute(
+                    "UPDATE stories SET published = ? WHERE id = ?",
+                    (normalized, row["id"]),
+                )
+                migrated += 1
+    return migrated
+
+
 def save_stories(stories: Iterable[Dict[str, str]]) -> int:
     """Save new stories and skip duplicate story IDs."""
     create_table()
@@ -65,7 +114,7 @@ def save_stories(stories: Iterable[Dict[str, str]]) -> int:
                     story.get("summary", ""),
                     story.get("link", ""),
                     story.get("source", ""),
-                    story.get("published", ""),
+                    normalize_published(story.get("published", "")),
                     story.get("fetched_at", fetched_at),
                     story.get("section", "Top"),
                 ),
@@ -121,6 +170,5 @@ def get_story_by_id(story_id: str) -> Optional[Dict[str, str]]:
         ).fetchone()
 
     return dict(row) if row else None
-
-
 create_table()
+migrate_published_dates()
