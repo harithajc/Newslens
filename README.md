@@ -29,11 +29,11 @@ People spend hours on news but still miss what matters.
 3. **Train:** TF-IDF with Logistic Regression learns from the labels and ranks new stories
 4. **Check:** accuracy and F1-score
 5. **Show:** the backend sends ranked stories to the app
-6. **Comic (optional):** a language model turns the headline and summary into comic panels
+6. **Comic (optional):** the comic generator uses the headline and summary to create a 4-panel comic
 
 ## PanelPulse (Comic Feature)
 
-A manual test is complete: one news story became a finished 4-panel comic with a consistent robot reporter mascot.
+PanelPulse uses the story's headline and summary for the comic text. The first panel uses the headline and the second uses the first summary sentence; panels 3 and 4 use fixed template text. When a second summary sentence is available, panel 3 can use it as context. A Hugging Face provider can generate panel art, with a local Pillow fallback when it is unavailable.
 
 ![Sample comic](PanelPulse_ComicGenerator/Images/sample-image.png)
 
@@ -55,7 +55,7 @@ Rules for comics: use only the headline and short summary, add text in code (not
 ## Repository Structure
 
 - `APP/`: the NewsLens app
-  - `backend/`: feed fetching, API, database
+  - `backend/`: FastAPI backend, feed fetching, SQLite storage, and scheduled refresh
   - `ml/`: labeled data and the importance model
   - `frontend/`: the screens users see
 - `PanelPulse_ComicGenerator/`: the comic feature
@@ -64,14 +64,29 @@ Rules for comics: use only the headline and short summary, add text in code (not
 ## Status
 
 - [x] Idea and plan
-- [x] Comic concept tested manually
-- [ ] Feed fetching
+- [x] Feed fetching
+- [x] SQLite storage
+- [x] Scheduled refresh every 30 minutes
+- [x] Backend API (`/api/stories`, `/api/refresh`, and comic endpoints)
+- [x] Automated comic generation from stored stories
 - [ ] Labeled dataset
 - [ ] Importance model
-- [ ] Backend API
 - [ ] Frontend app
-- [x] Automated comic generation (provider-optional PanelPulse pipeline)
 - [ ] Pilot survey and user testing
+
+## How to run
+
+From the repository root, install the backend dependencies:
+
+```bash
+pip install -r APP/backend/requirements.txt
+```
+
+Then start the API:
+
+```bash
+py -m uvicorn APP.backend.main:app --reload
+```
 
 ## Limitations
 
