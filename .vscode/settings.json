@@ -1,3 +1,8 @@
 {
-    "python-envs.defaultEnvManager": "ms-python.python:system"
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+
+  "python.analysis.extraPaths": [
+    "./PanelPulse_ComicGenerator",
+    "./PanelPulse_v2"
+  ]
 }

@@ -1,7 +1,7 @@
 """NewsLens API for generating PanelPulse comics."""
 
 from __future__ import annotations
-
+from threading import Lock
 import sys
 from pathlib import Path
 from typing import Dict, List
@@ -21,7 +21,11 @@ if str(COMIC_ROOT) not in sys.path:
     sys.path.insert(0, str(COMIC_ROOT))
 
 from Generator.comic_generator import ComicGenerator, ComicInput  # noqa: E402
+V2_ROOT = PROJECT_ROOT / "PanelPulse_v2"
+if str(V2_ROOT) not in sys.path:
+    sys.path.insert(0, str(V2_ROOT))
 
+import comic as comic_v2  # noqa: E402
 
 class ComicRequest(BaseModel):
     """Story facts accepted by the comic generator."""
@@ -140,7 +144,28 @@ def make_comic(headline: str, summary: str, source_url: str) -> ComicResponse:
             for panel in result.panels
         ],
     )
+v2_lock = Lock()  # comic.py uses one shared pen, so draw one comic at a time
 
+
+def make_comic_v2(headline: str, summary: str) -> ComicResponse:
+    """Create a comic with the rule-based PanelPulse v2 generator."""
+    with v2_lock:
+        image = comic_v2.make_comic(headline, summary)
+    filename = f"{uuid4().hex}.png"
+    try:
+        image.save(OUTPUT_DIR / filename)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Unable to save comic output") from exc
+
+    panels = comic_v2.make_panels(headline, summary)
+    return ComicResponse(
+        comic_url=f"/comics/{filename}",
+        used_image_provider=False,
+        panels=[
+            PanelResponse(title=p["title"], caption=p["caption"], dialogue="")
+            for p in panels
+        ],
+    )
 
 @app.post("/api/comics", response_model=ComicResponse, status_code=201)
 def create_comic(request: ComicRequest) -> ComicResponse:
@@ -158,3 +183,17 @@ def create_story_comic(story_id: str) -> ComicResponse:
     title = story.get("title", "")
     summary = story.get("summary", "").strip() or title
     return make_comic(title, summary, story.get("link", ""))
+
+@app.post("/api/v2/comics", response_model=ComicResponse, status_code=201)
+def create_comic_v2(request: ComicRequest) -> ComicResponse:
+    """Create a v2 comic from a manual headline and summary."""
+    return make_comic_v2(request.headline, request.summary)
+
+
+@app.post("/api/v2/stories/{story_id}/comic", response_model=ComicResponse, status_code=201)
+def create_story_comic_v2(story_id: str) -> ComicResponse:
+    """Create a v2 comic from a saved news story."""
+    story = get_story_by_id(story_id)
+    if story is None:
+        raise HTTPException(status_code=404, detail="Story not found")
+    return make_comic_v2(story.get("title", ""), story.get("summary", ""))
