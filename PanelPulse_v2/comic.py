@@ -1,19 +1,26 @@
 import html
 import re
-from PIL import Image, ImageDraw, ImageFont
+from functools import lru_cache
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 DARK = "#263238"
 
-# ---- Layout numbers (from step 4) ----
-W, H = 1200, 1200
-HEADER = 60
-MARGIN = 20
+# ---- Layout numbers ----
+W, H = 2000, 2000
+HEADER = 100
+MARGIN = 30
 PANEL_W = (W - 3 * MARGIN) // 2
 PANEL_H = (H - HEADER - 3 * MARGIN) // 2
-ART_H = 340
+ART_H = 600
 
-# `draw` is set at the start of make_comic. All drawing helpers use it.
+ART_DIR = Path(__file__).parent / "scene_art"
+ART_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
+
+# `draw` and `canvas` are set at the start of make_comic.
 draw = None
+canvas = None   # the whole image, needed for pasting pictures
 
 # a tiny invisible image, only used to MEASURE text width
 _measure = ImageDraw.Draw(Image.new("RGB", (1, 1)))
@@ -72,7 +79,7 @@ def wrap_text(text, font, max_width):
         lines.append(line)
     return lines
 
-def draw_caption(text, box, start_size=28, min_size=14):
+def draw_caption(text, box, start_size=40, min_size=20):
     left, top, right, bottom = box
     width, height = right - left, bottom - top
     for size in range(start_size, min_size - 1, -2):
@@ -132,7 +139,8 @@ def panel_plan(topic):
     return [{"scene": s, "mood": m} for s, m in zip(scenes, moods)]
 
 
-# =====================  PART 3: PICTURES (steps 2, 4 and 7)  =====================
+# =====================  PART 3: PICTURES  =====================
+# ---- Fallback drawings (steps 2 and 7), used only if an art file is missing ----
 def circle(cx, cy, r, fill, outline=DARK, width=4):
     draw.ellipse((cx - r, cy - r, cx + r, cy + r),
                  fill=fill, outline=outline, width=width)
@@ -242,23 +250,39 @@ SCENES = {
     "checkmark": scene_checkmark,
 }
 
+# ---- The art pack: AI-made pictures in scene_art/ (png, jpg, jpeg or webp) ----
+@lru_cache(maxsize=None)
+def load_scene_art(scene, size):
+    for ext in ART_EXTENSIONS:
+        path = ART_DIR / f"{scene}{ext}"
+        if path.exists():
+            art = Image.open(path).convert("RGB")
+            return ImageOps.fit(art, size, method=Image.LANCZOS)   # crop to fill, no stretching
+    return None            # no file found: caller uses the shape drawing
+
 def draw_panel(x0, y0, number, title, caption, bg, scene, mood):
     draw.rectangle((x0, y0, x0 + PANEL_W, y0 + PANEL_H), fill=bg, outline=DARK, width=6)
-    draw_robot(x0 + 170, y0 + 215, 80, mood)                 # robot on the left
-    SCENES[scene](x0 + PANEL_W - 150, y0 + 215)              # scene on the right
+
+    art = load_scene_art(scene, (PANEL_W - 12, ART_H - 12))
+    if art:
+        canvas.paste(art, (x0 + 6, y0 + 6))
+    else:                                   # fallback: shapes from steps 2 and 7
+        draw_robot(x0 + 280, y0 + 350, 130, mood)
+        SCENES[scene](x0 + PANEL_W - 250, y0 + 350)
 
     cap_top = y0 + ART_H
     draw.rectangle((x0 + 3, cap_top, x0 + PANEL_W - 3, y0 + PANEL_H - 3), fill="#FFFBEF")
-    draw.line((x0, cap_top, x0 + PANEL_W, cap_top), fill=DARK, width=4)
-    draw.text((x0 + 24, cap_top + 14), f"{number}. {title}", font=load_font(30), fill=DARK)
-    draw_caption(caption, (x0 + 24, cap_top + 60, x0 + PANEL_W - 24, y0 + PANEL_H - 20))
+    draw.line((x0, cap_top, x0 + PANEL_W, cap_top), fill=DARK, width=5)
+    draw.text((x0 + 36, cap_top + 16), f"{number}. {title}", font=load_font(40), fill=DARK)
+    draw_caption(caption, (x0 + 36, cap_top + 76, x0 + PANEL_W - 36, y0 + PANEL_H - 20))
 
 
 # =====================  PART 4: THE ONE FUNCTION  =====================
 def make_comic(headline, summary=""):
-    global draw
+    global draw, canvas
     img = Image.new("RGB", (W, H), "#EDE6D6")
     draw = ImageDraw.Draw(img)
+    canvas = img
 
     panels = make_panels(headline, summary)                       # step 5
     topic = pick_topic(clean_text(headline), clean_text(summary)) # step 6
@@ -266,7 +290,7 @@ def make_comic(headline, summary=""):
     colors = ["#F7E8C8", "#E3F0E8", "#E4ECF7", "#F7E3E3"]
 
     draw.rectangle((0, 0, W, HEADER), fill=DARK)
-    draw.text((20, 16), "PANELPULSE | AI-ASSISTED", font=load_font(26), fill="#FFFFFF")
+    draw.text((30, 28), "PANELPULSE | AI-ASSISTED", font=load_font(44), fill="#FFFFFF")
 
     for i, p in enumerate(panels):                                # step 4
         x0 = MARGIN + (i % 2) * (PANEL_W + MARGIN)
