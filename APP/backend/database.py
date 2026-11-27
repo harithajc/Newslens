@@ -1,11 +1,17 @@
 """Simple SQLite storage for NewsLens stories."""
 
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Generator, Iterable, List, Optional
 from zoneinfo import ZoneInfo
+
+if __package__:
+    from .story_text import clean_story_text
+else:
+    from story_text import clean_story_text
 
 
 DATABASE_PATH = Path(__file__).resolve().parent / "newslens.db"
@@ -45,9 +51,19 @@ def get_connection() -> sqlite3.Connection:
     return connection
 
 
+@contextmanager
+def _connection_scope() -> Generator[sqlite3.Connection, None, None]:
+    connection = get_connection()
+    try:
+        with connection:
+            yield connection
+    finally:
+        connection.close()
+
+
 def create_table() -> None:
     """Create the stories table if it does not exist."""
-    with get_connection() as connection:
+    with _connection_scope() as connection:
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS stories (
@@ -74,7 +90,7 @@ def migrate_published_dates() -> int:
     """Rewrite existing RSS published values to ISO 8601 in place."""
     create_table()
     migrated = 0
-    with get_connection() as connection:
+    with _connection_scope() as connection:
         rows = connection.execute(
             "SELECT id, published FROM stories WHERE published IS NOT NULL"
         ).fetchall()
@@ -90,13 +106,33 @@ def migrate_published_dates() -> int:
     return migrated
 
 
+def migrate_story_text() -> int:
+    """Clean existing story titles and summaries; safe to rerun at startup."""
+    create_table()
+    migrated = 0
+    with _connection_scope() as connection:
+        rows = connection.execute(
+            "SELECT id, title, summary FROM stories"
+        ).fetchall()
+        for row in rows:
+            title = clean_story_text(row["title"])
+            summary = clean_story_text(row["summary"])
+            if title != row["title"] or summary != row["summary"]:
+                connection.execute(
+                    "UPDATE stories SET title = ?, summary = ? WHERE id = ?",
+                    (title, summary, row["id"]),
+                )
+                migrated += 1
+    return migrated
+
+
 def save_stories(stories: Iterable[Dict[str, str]]) -> int:
     """Save new stories and skip duplicate story IDs."""
     create_table()
     inserted = 0
     fetched_at = datetime.utcnow().isoformat(timespec="seconds")
 
-    with get_connection() as connection:
+    with _connection_scope() as connection:
         for story in stories:
             story_id = story.get("id")
             if not story_id:
@@ -129,7 +165,7 @@ def get_stories(limit: int = 50, section: Optional[str] = None) -> List[Dict[str
     create_table()
     limit = max(1, limit)
 
-    with get_connection() as connection:
+    with _connection_scope() as connection:
         if section:
             rows = connection.execute(
                 """
@@ -159,7 +195,7 @@ def get_story_by_id(story_id: str) -> Optional[Dict[str, str]]:
     """Return one story by ID, or None when it does not exist."""
     create_table()
 
-    with get_connection() as connection:
+    with _connection_scope() as connection:
         row = connection.execute(
             """
             SELECT id, title, summary, link, source, published, fetched_at, section

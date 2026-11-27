@@ -155,6 +155,12 @@ TRAGIC_WORDS = [
     "killed", "dead", "death", "dies", "died", "murder", "blast",
     "fire", "crash", "accident", "flood", "injured", "collapse",
 ]
+POLITICS_RELIGION_WORDS = [
+    "election", "poll", "party", "alliance", "seats", "minister",
+    "chief minister", "mla", "mp", "bjp", "congress", "sp", "aap",
+    "tmc", "temple", "mosque", "church", "dargah", "communal", "riot",
+    "sacred", "religious", "bulldozer",
+]
 SERIOUS_TOPICS = {"warning", "weather", "law", "health"}
 CHECKMARK_TOPICS = {"money", "school", "sports", "newspaper"}
 
@@ -171,14 +177,15 @@ def pick_topic(headline, summary=""):
     return best_topic
 
 
-def is_serious_story(headline, summary="", topic=None):
-    if topic is None:
-        topic = pick_topic(clean_text(headline), clean_text(summary))
+# This keeps NewsLens politically neutral and avoids cartoons about deaths, politics and religion.
+def is_sensitive(headline, summary):
+    topic = pick_topic(clean_text(headline), clean_text(summary))
     if topic in SERIOUS_TOPICS:
         return True
     story_text = f"{clean_text(headline)} {clean_text(summary)}"
-    tragic_pattern = r"\b(?:" + "|".join(map(re.escape, TRAGIC_WORDS)) + r")\b"
-    return re.search(tragic_pattern, story_text, flags=re.IGNORECASE) is not None
+    sensitive_words = TRAGIC_WORDS + POLITICS_RELIGION_WORDS
+    sensitive_pattern = r"\b(?:" + "|".join(map(re.escape, sensitive_words)) + r")\b"
+    return re.search(sensitive_pattern, story_text, flags=re.IGNORECASE) is not None
 
 
 def panel_plan(topic, sensitive=False):
@@ -420,7 +427,7 @@ def make_comic(headline, summary="", source_url=""):
 
     panels = make_panels(headline, summary)                       # step 5
     topic = pick_topic(clean_text(headline), clean_text(summary)) # step 6
-    sensitive = is_serious_story(headline, summary, topic)
+    sensitive = is_sensitive(headline, summary)
     plan = panel_plan(topic, sensitive)                           # step 6
     colors = ["#F7E8C8", "#E3F0E8", "#E4ECF7", "#F7E3E3"]
     caption_width = PANEL_W - 72

@@ -12,8 +12,15 @@ from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 from pydantic import BaseModel, Field
 
-from .database import get_story_by_id, get_stories, migrate_published_dates, save_stories
+from .database import (
+    get_story_by_id,
+    get_stories,
+    migrate_published_dates,
+    migrate_story_text,
+    save_stories,
+)
 from .fetch_news import fetch_all_feeds
+from .story_text import is_comic_available
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 COMIC_ROOT = PROJECT_ROOT / "PanelPulse_ComicGenerator"
@@ -47,6 +54,10 @@ class ComicResponse(BaseModel):
     panels: List[PanelResponse]
 
 
+class V2ComicResponse(ComicResponse):
+    sensitive: bool
+
+
 OUTPUT_DIR = COMIC_ROOT / "output"
 REFRESH_MINUTES = 30
 generator = ComicGenerator(output_dir=OUTPUT_DIR)
@@ -70,6 +81,7 @@ def refresh_news() -> Dict[str, int]:
 def start_scheduler() -> None:
     """Start automatic headline refreshes."""
     migrate_published_dates()
+    migrate_story_text()
     scheduler.add_job(
         refresh_news,
         "interval",
@@ -103,9 +115,20 @@ def health() -> Dict[str, str]:
 
 
 @app.get("/api/stories")
-def read_stories(limit: int = 50, section: str = None) -> List[Dict[str, str]]:
+def read_stories(limit: int = 50, section: str = None) -> List[Dict[str, object]]:
     """Return stories saved in the database."""
-    return get_stories(limit, section)
+    enriched_stories = []
+    for story in get_stories(limit, section):
+        headline = story.get("title", "")
+        summary = story.get("summary", "")
+        enriched_stories.append(
+            {
+                **story,
+                "comic_available": is_comic_available(headline, summary),
+                "sensitive": comic_v2.is_sensitive(headline, summary),
+            }
+        )
+    return enriched_stories
 
 
 @app.post("/api/refresh")
@@ -147,10 +170,10 @@ def make_comic(headline: str, summary: str, source_url: str) -> ComicResponse:
 v2_lock = Lock()  # comic.py uses one shared pen, so draw one comic at a time
 
 
-def make_comic_v2(headline: str, summary: str) -> ComicResponse:
+def make_comic_v2(headline: str, summary: str, source_url: str = "") -> V2ComicResponse:
     """Create a comic with the rule-based PanelPulse v2 generator."""
     with v2_lock:
-        image = comic_v2.make_comic(headline, summary)
+        image = comic_v2.make_comic(headline, summary, source_url)
     filename = f"{uuid4().hex}.png"
     try:
         image.save(OUTPUT_DIR / filename)
@@ -158,13 +181,14 @@ def make_comic_v2(headline: str, summary: str) -> ComicResponse:
         raise HTTPException(status_code=500, detail="Unable to save comic output") from exc
 
     panels = comic_v2.make_panels(headline, summary)
-    return ComicResponse(
+    return V2ComicResponse(
         comic_url=f"/comics/{filename}",
         used_image_provider=False,
         panels=[
             PanelResponse(title=p["title"], caption=p["caption"], dialogue="")
             for p in panels
         ],
+        sensitive=comic_v2.is_sensitive(headline, summary),
     )
 
 @app.post("/api/comics", response_model=ComicResponse, status_code=201)
@@ -184,16 +208,20 @@ def create_story_comic(story_id: str) -> ComicResponse:
     summary = story.get("summary", "").strip() or title
     return make_comic(title, summary, story.get("link", ""))
 
-@app.post("/api/v2/comics", response_model=ComicResponse, status_code=201)
-def create_comic_v2(request: ComicRequest) -> ComicResponse:
+@app.post("/api/v2/comics", response_model=V2ComicResponse, status_code=201)
+def create_comic_v2(request: ComicRequest) -> V2ComicResponse:
     """Create a v2 comic from a manual headline and summary."""
-    return make_comic_v2(request.headline, request.summary)
+    return make_comic_v2(request.headline, request.summary, request.source_url)
 
 
-@app.post("/api/v2/stories/{story_id}/comic", response_model=ComicResponse, status_code=201)
-def create_story_comic_v2(story_id: str) -> ComicResponse:
+@app.post("/api/v2/stories/{story_id}/comic", response_model=V2ComicResponse, status_code=201)
+def create_story_comic_v2(story_id: str) -> V2ComicResponse:
     """Create a v2 comic from a saved news story."""
     story = get_story_by_id(story_id)
     if story is None:
         raise HTTPException(status_code=404, detail="Story not found")
-    return make_comic_v2(story.get("title", ""), story.get("summary", ""))
+    return make_comic_v2(
+        story.get("title", ""),
+        story.get("summary", ""),
+        story.get("link", ""),
+    )
