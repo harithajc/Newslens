@@ -1,6 +1,11 @@
 import hashlib
 import feedparser
 
+if __package__:
+    from .story_text import clean_story_text
+else:
+    from story_text import clean_story_text
+
 FEEDS = {
     "Top": "https://timesofindia.indiatimes.com/rssfeedstopstories.cms",
     "Most recent": "https://timesofindia.indiatimes.com/rssfeedmostrecent.cms",
@@ -16,8 +21,8 @@ def fetch_headlines(limit=10, feed_name="Top"):
         link = entry.get("link", "")
         stories.append({
             "id": hashlib.md5(link.encode()).hexdigest()[:10],
-            "title": entry.get("title", ""),
-            "summary": entry.get("summary", ""),
+            "title": clean_story_text(entry.get("title", "")),
+            "summary": clean_story_text(entry.get("summary", "")),
             "link": link,
             "source": "Times of India",
             "published": entry.get("published", ""),
