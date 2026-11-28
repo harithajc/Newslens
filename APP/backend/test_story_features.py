@@ -1,4 +1,6 @@
+from contextlib import redirect_stdout
 import hashlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -40,6 +42,52 @@ class StoryFeatureTests(unittest.TestCase):
         self.assertEqual(story["title"], "J&K news")
         self.assertEqual(story["summary"], "A clean summary & more.")
         self.assertEqual(story["id"], hashlib.md5(link.encode()).hexdigest()[:10])
+
+    def test_fetch_all_feeds_deduplicates_links_and_keeps_feed_section(self):
+        repeated_link = "https://example.com/repeated"
+        unique_link = "https://example.com/unique"
+        india_entry = {"link": repeated_link, "title": "India story"}
+        world_entry = {"link": repeated_link, "title": "Same story"}
+        business_entry = {"link": unique_link, "title": "Business story"}
+        feeds = {
+            "India": "india-url",
+            "World": "world-url",
+            "Business": "business-url",
+        }
+        parsed_feeds = [
+            SimpleNamespace(entries=[india_entry]),
+            SimpleNamespace(entries=[world_entry]),
+            SimpleNamespace(entries=[business_entry]),
+        ]
+
+        with patch.object(fetch_news, "FEEDS", feeds), patch.object(
+            fetch_news.feedparser, "parse", side_effect=parsed_feeds
+        ), redirect_stdout(io.StringIO()):
+            stories = fetch_news.fetch_all_feeds()
+
+        self.assertEqual([repeated_link, unique_link], [s["link"] for s in stories])
+        self.assertEqual(["India", "Business"], [s["section"] for s in stories])
+
+    def test_fetch_all_feeds_skips_failures_and_empty_feeds(self):
+        feeds = {"Failed": "failed-url", "Empty": "empty-url", "Good": "good-url"}
+        good_entry = {"link": "https://example.com/good", "title": "Good story"}
+        parsed_feeds = [
+            RuntimeError("network error"),
+            SimpleNamespace(entries=[]),
+            SimpleNamespace(entries=[good_entry]),
+        ]
+        output = io.StringIO()
+
+        with patch.object(fetch_news, "FEEDS", feeds), patch.object(
+            fetch_news.feedparser, "parse", side_effect=parsed_feeds
+        ), redirect_stdout(output):
+            stories = fetch_news.fetch_all_feeds()
+
+        self.assertEqual(["Good"], [story["section"] for story in stories])
+        self.assertEqual(2, output.getvalue().count("Warning:"))
+        self.assertIn("Failed: 0 stories", output.getvalue())
+        self.assertIn("Empty: 0 stories", output.getvalue())
+        self.assertIn("Good: 1 story", output.getvalue())
 
     def test_stories_route_adds_both_flags(self):
         database_stories = [
