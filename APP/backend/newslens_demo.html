@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NewsLens</title>
+<style>
+:root {
+  --bg: #eef2f5; --card: #ffffff; --ink: #14202b; --muted: #55677a; --line: #d3dce4;
+  --accent: #1f4e79; --accent-ink: #ffffff; --ok: #1e7b46; --bad: #b3261e;
+  --warn-bg: #fff3d6; --warn-ink: #5c4300; --warn-line: #e8a317;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11171d; --card: #1a232c; --ink: #e8eef3; --muted: #9db0c0; --line: #2c3946;
+    --accent: #7fb2e0; --accent-ink: #0c1824; --ok: #6fd39a; --bad: #ff8a80;
+    --warn-bg: #3a2f10; --warn-ink: #f3dc9a; --warn-line: #c9921a;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 "Segoe UI", system-ui, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px 72px; }
+h1 { font-size: 2rem; margin: 0; letter-spacing: -0.01em; }
+h2 { font-size: 1.25rem; margin: 0 0 8px; }
+h3 { font-size: 1.05rem; margin: 16px 0 6px; }
+p { margin: 0 0 8px; }
+.tag { color: var(--muted); margin: 2px 0 0; }
+.muted { color: var(--muted); font-size: 0.92rem; }
+.top { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: flex-start; }
+.status { font-size: 0.92rem; font-weight: 600; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
+.status.ok { color: var(--ok); } .status.bad { color: var(--bad); }
+.tabs { display: flex; gap: 4px; margin: 20px 0 16px; border-bottom: 2px solid var(--line); }
+.tabs button { font: inherit; background: none; border: 0; color: var(--muted); padding: 10px 14px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.box { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 0.92rem; color: var(--muted); }
+label.check { flex-direction: row; align-items: center; gap: 8px; }
+input, select, textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; width: 100%; }
+input[type="checkbox"] { width: auto; }
+input#count { width: 90px; }
+textarea { resize: vertical; min-height: 84px; }
+button.go { font: inherit; background: var(--accent); color: var(--accent-ink); border: 1px solid var(--accent); border-radius: 6px; padding: 10px 16px; cursor: pointer; }
+button.go:disabled { opacity: 0.55; cursor: progress; }
+button.chip { font: inherit; font-size: 0.9rem; background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+.story { margin-top: 12px; }
+.story h2 { font-size: 1.12rem; line-height: 1.35; }
+.meta { color: var(--muted); font-size: 0.88rem; margin-bottom: 8px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; }
+.slot img { display: block; width: 100%; max-width: 640px; height: auto; border: 1px solid var(--line); border-radius: 6px; margin: 12px 0 8px; }
+.slot ol { padding-left: 22px; margin: 0; }
+.slot li { margin-bottom: 4px; }
+.note { background: var(--warn-bg); color: var(--warn-ink); border-left: 4px solid var(--warn-line); padding: 10px 12px; border-radius: 4px; margin-top: 12px; }
+.error { color: var(--bad); }
+details { margin-top: 28px; color: var(--muted); font-size: 0.92rem; }
+@media (max-width: 520px) { body { font-size: 16px; } h1 { font-size: 1.7rem; } }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div>
+      <h1>NewsLens</h1>
+      <p class="tag">A short daily briefing, ranked by importance, not clicks.</p>
+    </div>
+    <p id="status" class="status" role="status">Checking the server…</p>
+  </header>
+
+  <div class="tabs" role="tablist" aria-label="Pages">
+    <button role="tab" id="tab-news" aria-selected="true" aria-controls="view-news">Today’s news</button>
+    <button role="tab" id="tab-comic" aria-selected="false" aria-controls="view-comic">Make a comic</button>
+  </div>
+
+  <!-- Page 1: news list -->
+  <section id="view-news" role="tabpanel" aria-labelledby="tab-news">
+    <div class="box">
+      <div class="controls">
+        <label>Section
+          <select id="section">
+            <option value="">All</option>
+            <option>Top</option><option>Most recent</option><option>India</option>
+            <option>Business</option><option>World</option><option>Sports</option>
+          </select>
+        </label>
+        <label>How many
+          <input id="count" type="number" min="1" max="50" value="10">
+        </label>
+        <button class="go" id="get-news">Get latest news</button>
+      </div>
+      <p class="muted" style="margin-top:12px">Stories are shown newest first for now. Ranking by importance comes after the model is trained.</p>
+      <label class="check" style="margin-top:8px">
+        <input type="checkbox" id="all-comics"> Show the comic button on every story (testing only)
+      </label>
+      <p id="news-note" class="muted" role="status" style="margin-top:8px"></p>
+    </div>
+    <div id="news-list"></div>
+  </section>
+
+  <!-- Page 2: manual comic maker -->
+  <section id="view-comic" role="tabpanel" aria-labelledby="tab-comic" hidden>
+    <div class="box">
+      <h2>Try the comic maker</h2>
+      <p class="muted">Pick an example or type your own story. The comic uses only the words you give it.</p>
+      <div class="chips" id="examples"></div>
+      <label>Headline
+        <input id="headline" autocomplete="off">
+      </label>
+      <label style="margin-top:12px">Short summary (can be empty)
+        <textarea id="summary"></textarea>
+      </label>
+      <label style="margin-top:12px">Source link (the comic shows its website name)
+        <input id="source" value="https://timesofindia.indiatimes.com/">
+      </label>
+      <p style="margin-top:16px"><button class="go" id="make">Make comic</button></p>
+      <div id="manual-slot" class="slot" role="status"></div>
+    </div>
+  </section>
+
+  <details>
+    <summary>Server address</summary>
+    <label style="margin-top:8px">Where the NewsLens server is running
+      <input id="base" value="http://127.0.0.1:8000" autocomplete="off">
+    </label>
+    <p class="muted">Use http://127.0.0.1:8001 if you started the server on port 8001.</p>
+  </details>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const state = { stories: [] };
+const baseUrl = () => $("#base").value.trim().replace(/\/+$/, "");
+const asList = (d) => (Array.isArray(d) ? d : (d && d.stories) || []);
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+async function api(path, options) {
+  let res;
+  try {
+    res = await fetch(baseUrl() + path, options);
+  } catch (e) {
+    throw new Error("Can’t reach the server. Start it from the project folder with: py -m uvicorn APP.backend.main:app --reload. If it is running, check the server address below and that CORS allows this page.");
+  }
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* not JSON */ }
+  if (!res.ok) {
+    const detail = data && data.detail ? " " + JSON.stringify(data.detail) : "";
+    throw new Error("The server answered with an error (HTTP " + res.status + ")." + detail);
+  }
+  return data;
+}
+
+/* ---------- server status ---------- */
+async function checkServer() {
+  const s = $("#status");
+  s.className = "status"; s.textContent = "Checking the server…";
+  try {
+    await api("/health");
+    s.className = "status ok"; s.textContent = "Server connected";
+  } catch (e) {
+    s.className = "status bad"; s.textContent = "Server not reachable";
+  }
+}
+
+/* ---------- showing a finished comic ---------- */
+function showComic(slot, d, altText) {
+  slot.textContent = "";
+  if (d.sensitive) {
+    slot.append(el("p", "note", "This story is marked sensitive. The real app hides the comic button for stories like this. It is shown here only so you can test the generator."));
+  }
+  const img = new Image();
+  img.alt = altText;
+  img.src = baseUrl() + d.comic_url;
+  img.onerror = () => slot.append(el("p", "error", "The comic was made, but the image could not be loaded from " + img.src));
+  const full = el("a", "", "Open full size");
+  full.href = img.src; full.target = "_blank"; full.rel = "noopener noreferrer";
+  const list = document.createElement("ol");
+  for (const p of d.panels) {
+    const li = document.createElement("li");
+    li.append(el("strong", "", p.title + ": "), document.createTextNode(p.caption));
+    list.append(li);
+  }
+  slot.append(img, el("p", "muted", "AI-assisted comic."), full, el("h3", "", "What each panel says"), list);
+}
+
+/* ---------- page 1: news ---------- */
+function renderNews() {
+  const box = $("#news-list");
+  box.textContent = "";
+  const testAll = $("#all-comics").checked;
+  for (const s of state.stories) {
+    const card = el("article", "box story");
+    card.append(el("h2", "", s.title));
+    const when = new Date(s.published);
+    card.append(el("p", "meta", [s.section, isNaN(when) ? s.published : when.toLocaleString()].filter(Boolean).join(" · ")));
+    card.append(el("p", "", s.summary ? s.summary.slice(0, 220) + (s.summary.length > 220 ? "…" : "") : "The feed gave no summary for this story."));
+
+    const actions = el("div", "actions");
+    const link = el("a", "", "Read the full article");
+    link.href = s.link; link.target = "_blank"; link.rel = "noopener noreferrer";
+    actions.append(link);
+
+    const normallyAllowed = s.comic_available && !s.sensitive;
+    const slot = el("div", "slot");
+    slot.setAttribute("role", "status");
+    if (normallyAllowed || testAll) {
+      const btn = el("button", "go", "See as comic");
+      btn.addEventListener("click", () => makeStoryComic(s, btn, slot));
+      actions.append(btn);
+      if (!normallyAllowed) actions.append(el("span", "muted", "Testing mode: the real app would hide this button."));
+    } else {
+      actions.append(el("span", "muted", s.sensitive ? "No comic: this story is marked sensitive." : "No comic: the feed gave no real summary."));
+    }
+    card.append(actions, slot);
+    box.append(card);
+  }
+}
+
+async function loadNews() {
+  const section = $("#section").value;
+  const count = Math.max(1, Math.min(50, Number($("#count").value) || 10));
+  const qs = "?limit=" + count + (section ? "&section=" + encodeURIComponent(section) : "");
+  state.stories = asList(await api("/api/stories" + qs));
+  renderNews();
+  return state.stories.length;
+}
+
+async function getLatest() {
+  const btn = $("#get-news");
+  const note = $("#news-note");
+  btn.disabled = true;
+  note.className = "muted"; note.textContent = "Getting the latest news…";
+  try {
+    let fresh = "";
+    try {
+      const r = await api("/api/refresh", { method: "POST" });
+      fresh = "Fetched " + r.fetched + " stories, " + r.saved + " new. ";
+    } catch (e) { fresh = "Could not fetch new stories, showing saved ones. "; }
+    const n = await loadNews();
+    note.textContent = fresh + (n ? "Showing " + n + "." : "No stories found yet.");
+  } catch (e) {
+    note.className = "error"; note.textContent = e.message;
+  }
+  btn.disabled = false;
+}
+
+async function makeStoryComic(story, btn, slot) {
+  btn.disabled = true; btn.textContent = "Making comic…";
+  slot.textContent = "Making your comic. This takes a few seconds.";
+  try {
+    const d = await api("/api/v2/stories/" + encodeURIComponent(story.id) + "/comic", { method: "POST" });
+    showComic(slot, d, "Four-panel comic about: " + story.title);
+    btn.textContent = "Make it again";
+  } catch (e) {
+    slot.textContent = ""; slot.append(el("p", "error", e.message));
+    btn.textContent = "Try again";
+  }
+  btn.disabled = false;
+}
+
+/* ---------- page 2: manual comic maker ---------- */
+const EXAMPLES = [
+  ["Money", "Central bank holds interest rates as inflation eases", "The bank kept its benchmark rate unchanged. Officials said price growth is slowing."],
+  ["Court", "High court pauses new city zoning rules", "The court issued an interim order today. It will hear arguments next month."],
+  ["Weather", "Heavy rain floods roads, schools close for two days", "Authorities closed schools in the city on Monday. More rain is expected."],
+  ["Sports", "India wins cricket series after close final", "The team secured the series with a late wicket. The next tournament begins in June."],
+  ["Accident (sensitive)", "Truck rams bike, two youths killed", "Police said two youths died at the spot."],
+  ["No summary", "New community library opens in the city", ""],
+];
+for (const [label, h, s] of EXAMPLES) {
+  const b = el("button", "chip", label);
+  b.type = "button";
+  b.addEventListener("click", () => { $("#headline").value = h; $("#summary").value = s; });
+  $("#examples").append(b);
+}
+
+async function makeManual() {
+  const slot = $("#manual-slot");
+  const headline = $("#headline").value.trim();
+  if (!headline) { slot.textContent = ""; slot.append(el("p", "error", "Type a headline or pick an example first.")); return; }
+  const btn = $("#make");
+  btn.disabled = true; btn.textContent = "Making comic…";
+  slot.textContent = "Making your comic. This takes a few seconds.";
+  try {
+    const d = await api("/api/v2/comics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ headline, summary: $("#summary").value.trim(), source_url: $("#source").value.trim() }),
+    });
+    showComic(slot, d, "Four-panel comic about: " + headline);
+  } catch (e) {
+    slot.textContent = ""; slot.append(el("p", "error", e.message));
+  }
+  btn.disabled = false; btn.textContent = "Make comic";
+}
+
+/* ---------- tabs and start-up ---------- */
+function showTab(name) {
+  for (const n of ["news", "comic"]) {
+    $("#view-" + n).hidden = n !== name;
+    $("#tab-" + n).setAttribute("aria-selected", String(n === name));
+  }
+}
+$("#tab-news").addEventListener("click", () => showTab("news"));
+$("#tab-comic").addEventListener("click", () => showTab("comic"));
+$("#get-news").addEventListener("click", getLatest);
+$("#all-comics").addEventListener("change", renderNews);
+$("#make").addEventListener("click", makeManual);
+$("#base").addEventListener("change", () => { checkServer(); });
+
+checkServer().then(() => loadNews().catch((e) => { $("#news-note").className = "error"; $("#news-note").textContent = e.message; }));
+</script>
+</body>
+</html>
