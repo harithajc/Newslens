@@ -6,6 +6,8 @@ from urllib.parse import urlparse
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
+from sensitive_words import LEADER_NAMES, POLITICS_RELIGION_WORDS, TRAGIC_WORDS
+
 DARK = "#263238"
 
 # ---- Layout numbers ----
@@ -151,16 +153,6 @@ TOPIC_WORDS = {
     "transport": ["flight", "train", "metro", "airport", "railway", "traffic"],
 }
 
-TRAGIC_WORDS = [
-    "killed", "dead", "death", "dies", "died", "murder", "blast",
-    "fire", "crash", "accident", "flood", "injured", "collapse",
-]
-POLITICS_RELIGION_WORDS = [
-    "election", "poll", "party", "alliance", "seats", "minister",
-    "chief minister", "mla", "mp", "bjp", "congress", "sp", "aap",
-    "tmc", "temple", "mosque", "church", "dargah", "communal", "riot",
-    "sacred", "religious", "bulldozer",
-]
 SERIOUS_TOPICS = {"warning", "weather", "law", "health"}
 CHECKMARK_TOPICS = {"money", "school", "sports", "newspaper"}
 
@@ -179,11 +171,8 @@ def pick_topic(headline, summary=""):
 
 # This keeps NewsLens politically neutral and avoids cartoons about deaths, politics and religion.
 def is_sensitive(headline, summary):
-    topic = pick_topic(clean_text(headline), clean_text(summary))
-    if topic in SERIOUS_TOPICS:
-        return True
     story_text = f"{clean_text(headline)} {clean_text(summary)}"
-    sensitive_words = TRAGIC_WORDS + POLITICS_RELIGION_WORDS
+    sensitive_words = TRAGIC_WORDS + POLITICS_RELIGION_WORDS + LEADER_NAMES
     sensitive_pattern = r"\b(?:" + "|".join(map(re.escape, sensitive_words)) + r")\b"
     return re.search(sensitive_pattern, story_text, flags=re.IGNORECASE) is not None
 
@@ -196,10 +185,20 @@ def panel_plan(topic, sensitive=False):
         moods = ["neutral", "thinking", "thinking", "neutral"]
     else:
         moods = ["neutral", "surprised", "thinking", "happy"]
+    if sensitive:
+        moods = ["neutral", "thinking", "thinking", "neutral"]
 
     calm_newspaper_exists = scene_art_path("newspaper_calm") is not None
     calm_closing_exists = scene_art_path("closing_calm") is not None
-    if serious:
+    if sensitive:
+        opening = "newspaper_calm"
+        panel_three = (
+            "magnifier" if has_topic else
+            "newspaper_calm" if calm_newspaper_exists else
+            "newspaper"
+        )
+        closing = "closing_calm"
+    elif serious:
         opening = "newspaper_calm" if calm_newspaper_exists else "magnifier"
         panel_three = (
             "magnifier" if has_topic else
